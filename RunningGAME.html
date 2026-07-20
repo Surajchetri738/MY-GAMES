@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS Endless Runner</title>
+    <style>
+        body {
+            margin: 0;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+        #gameUi {
+            margin-bottom: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            display: flex;
+            gap: 20px;
+        }
+        canvas {
+            background: #222;
+            box-shadow: 0 0 30px rgba(0,0,0,0.7);
+            border-radius: 8px;
+        }
+        #gameOverScreen {
+            display: none;
+            position: absolute;
+            background: rgba(0,0,0,0.85);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #ff4757;
+        }
+        button {
+            background: #2ed573;
+            border: none;
+            padding: 10px 20px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover { background: #26af5f; }
+    </style>
+</head>
+<body>
+
+<div id="gameUi">
+    <div>Coins: <span id="coinCount">0</span></div>
+    <div>Score: <span id="scoreVal">0</span></div>
+</div>
+
+<canvas id="gameCanvas" width="500" height="700"></canvas>
+
+<div id="gameOverScreen" id="gameOverScreen">
+    <h1 style="color: #ff4757; margin: 0 0 10px 0;">GAME OVER</h1>
+    <p>Final Score: <span id="finalScore">0</span></p>
+    <p>Coins Collected: <span id="finalCoins">0</span></p>
+    <button onclick="resetGame()">Run Again</button>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// Game State
+let score = 0;
+let coins = 0;
+let gameSpeed = 5;
+let isGameOver = false;
+
+// 3 Lanes configuration
+const lanes = [130, 250, 370]; 
+
+// Player Object
+let player = {
+    lane: 1,
+    x: lanes[1],
+    y: 580,
+    targetX: lanes[1],
+    size: 40,
+    emoji: "🏃" 
+};
+
+// Arrays to hold moving environment objects
+let scenery = [];  // Trees and buildings
+let obstacles = [];// Crates/Barriers
+let gameCoins = [];  // Collectible coins
+
+// Keyboard Input
+window.addEventListener("keydown", (e) => {
+    if (isGameOver) return;
+    if ((e.key === "ArrowLeft" || e.key === "a") && player.lane > 0) {
+        player.lane--;
+    }
+    if ((e.key === "ArrowRight" || e.key === "d") && player.lane < 2) {
+        player.lane++;
+    }
+    player.targetX = lanes[player.lane];
+});
+
+// Spawning Helpers
+function spawnScenery() {
+    if (Math.random() < 0.05) {
+        // Left side or Right side
+        let isLeft = Math.random() > 0.5;
+        scenery.push({
+            x: isLeft ? Math.random() * 50 : 430 + Math.random() * 50,
+            y: -50,
+            type: Math.random() > 0.5 ? "🌲" : "🏢",
+            size: 20
+        });
+    }
+}
+
+function spawnGameplayElements() {
+    // Spawn Obstacles
+    if (Math.random() < 0.02) {
+        let randomLane = Math.floor(Math.random() * 3);
+        obstacles.push({
+            lane: randomLane,
+            x: lanes[randomLane],
+            y: -40,
+            size: 30,
+            type: "🚧"
+        });
+    }
+    // Spawn Coins
+    if (Math.random() < 0.03) {
+        let randomLane = Math.floor(Math.random() * 3);
+        // Ensure we aren't spawning a coin directly on an obstacle instantly
+        gameCoins.push({
+            lane: randomLane,
+            x: lanes[randomLane],
+            y: -20,
+            size: 25,
+            type: "🪙"
+        });
+    }
+}
+
+// Reset Game
+function resetGame() {
+    score = 0;
+    coins = 0;
+    gameSpeed = 5;
+    isGameOver = false;
+    player.lane = 1;
+    player.x = lanes[1];
+    player.targetX = lanes[1];
+    scenery = [];
+    obstacles = [];
+    gameCoins = [];
+    document.getElementById("gameOverScreen").style.display = "none";
+    update();
+}
+
+// Main Game Loop
+function update() {
+    if (isGameOver) return;
+
+    // 1. CLEAR CANVAS
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 2. DRAW BACKGROUND (Grass environment)
+    ctx.fillStyle = "#1e7e34";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 3. DRAW 3-LANE ROAD (Perspective effect)
+    ctx.fillStyle = "#3d3d3d";
+    ctx.beginPath();
+    ctx.moveTo(180, 0); // Top width of road
+    ctx.lineTo(320, 0);
+    ctx.lineTo(450, 700); // Bottom width of road
+    ctx.lineTo(50, 700);
+    ctx.fill();
+
+    // Draw Lane Dividers
+    ctx.strokeStyle = "#ffffff";
+    ctx.setLineDash([20, 20]);
+    ctx.lineWidth = 4;
+    
+    // Left divider
+    ctx.beginPath(); ctx.moveTo(226, 0); ctx.lineTo(183, 700); ctx.stroke();
+    // Right divider
+    ctx.beginPath(); ctx.moveTo(273, 0); ctx.lineTo(316, 700); ctx.stroke();
+    ctx.setLineDash([]); // Reset dash
+
+    // 4. SPAWN & MOVE ENVIRONMENT (Scenery)
+    spawnScenery();
+    for (let i = scenery.length - 1; i >= 0; i--) {
+        let s = scenery[i];
+        s.y += gameSpeed;
+        s.size += 0.25; // Scale up size as it gets closer
+
+        // Draw scenery
+        ctx.font = `${s.size}px Arial`;
+        ctx.fillText(s.type, s.x, s.y);
+
+        // Remove off-screen items
+        if (s.y > canvas.height) scenery.splice(i, 1);
+    }
+
+    // 5. SPAWN & MOVE GAMEPLAY ELEMENTS
+    spawnGameplayElements();
+
+    // Move & Draw Coins
+    for (let i = gameCoins.length - 1; i >= 0; i--) {
+        let c = gameCoins[i];
+        c.y += gameSpeed;
+        
+        // Calculate dynamic perspective x-position
+        let progress = c.y / canvas.height;
+        let currentLaneX = 250 + (lanes[c.lane] - 250) * progress;
+
+        ctx.font = `${c.size}px Arial`;
+        ctx.fillText(c.type, currentLaneX - c.size/2, c.y);
+
+        // Collision detection with Coin
+        if (c.y > player.y - 20 && c.y < player.y + 20 && c.lane === player.lane) {
+            coins++;
+            document.getElementById("coinCount").innerText = coins;
+            gameCoins.splice(i, 1);
+            continue;
+        }
+
+        if (c.y > canvas.height) gameCoins.splice(i, 1);
+    }
+
+    // Move & Draw Obstacles
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        let o = obstacles[i];
+        o.y += gameSpeed;
+
+        let progress = o.y / canvas.height;
+        let currentLaneX = 250 + (lanes[o.lane] - 250) * progress;
+
+        ctx.font = `${o.size}px Arial`;
+        ctx.fillText(o.type, currentLaneX - o.size/2, o.y);
+
+        // Collision detection with Obstacle (Game Over condition)
+        if (o.y > player.y - 25 && o.y < player.y + 10 && o.lane === player.lane) {
+            isGameOver = true;
+            document.getElementById("finalScore").innerText = Math.floor(score);
+            document.getElementById("finalCoins").innerText = coins;
+            document.getElementById("gameOverScreen").style.display = "block";
+        }
+
+        if (o.y > canvas.height) obstacles.splice(i, 1);
+    }
+
+    // 6. MOVE & DRAW PLAYER
+    // Linear Interpolation (Lerp) for smooth lane switching animation
+    player.x += (player.targetX - player.x) * 0.25;
+
+    ctx.font = `${player.size}px Arial`;
+    // Center alignment adjustment for emoji text
+    ctx.fillText(player.emoji, player.x - player.size/2, player.y);
+
+    // 7. SCORE & DIFFICULTY INCREMENT
+    score += 0.1;
+    document.getElementById("scoreVal").innerText = Math.floor(score);
+    gameSpeed += 0.001; // Gradually speeds up over time
+
+    requestAnimationFrame(update);
+}
+
+// Kickstart the game loop initially
+update();
+</script>
+</body>
+</html>
+
+
